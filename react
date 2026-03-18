@@ -1,0 +1,145 @@
+// src/pages/MenuPage.js
+import React, { useEffect, useState, useRef } from 'react';
+import api from '../services/api';
+import DishCard from '../components/DishCard';
+import './MenuPage.css';
+
+// 排序选项（需要加新排序时只改这里）
+const SORT_OPTIONS = [
+  { value: '',           label: '默认排序' },
+  { value: 'sales',      label: '销量最高' },
+  { value: 'rating',     label: '评分最高' },
+  { value: 'price_asc',  label: '价格↑' },
+  { value: 'price_desc', label: '价格↓' },
+];
+
+const MenuPage = () => {
+  const [categories, setCategories] = useState([]);
+  const [dishes, setDishes]         = useState([]);
+  const [activeCat, setActiveCat]   = useState('');   // '' = 全部
+  const [sort, setSort]             = useState('');
+  const [keyword, setKeyword]       = useState('');
+  const [loading, setLoading]       = useState(true);
+  const searchRef = useRef(null);
+
+  // 加载分类
+  useEffect(() => {
+    api.getCategories().then(setCategories).catch(() => {});
+  }, []);
+
+  // 加载菜品（分类/排序/搜索变化时触发）
+  useEffect(() => {
+    setLoading(true);
+    const params = {};
+    if (activeCat) params.category_id = activeCat;
+    if (sort)      params.sort = sort;
+    if (keyword)   params.keyword = keyword;
+    api.getDishes(params)
+      .then(setDishes)
+      .catch(() => setDishes([]))
+      .finally(() => setLoading(false));
+  }, [activeCat, sort, keyword]);
+
+  // 搜索防抖
+  const [inputVal, setInputVal] = useState('');
+  useEffect(() => {
+    const t = setTimeout(() => setKeyword(inputVal), 400);
+    return () => clearTimeout(t);
+  }, [inputVal]);
+
+  const handleCatClick = (id) => {
+    setActiveCat(id);
+    setInputVal('');
+  };
+
+  return (
+    <div className="menu-page">
+      {/* ── 左侧分类栏（可扩展：数据库加分类自动出现）── */}
+      <aside className="category-sidebar">
+        <div className="sidebar-title">分类</div>
+        <ul>
+          <li
+            className={`sidebar-item ${activeCat === '' ? 'sidebar-item--active' : ''}`}
+            onClick={() => handleCatClick('')}
+          >
+            <span className="cat-icon">🍽️</span>
+            <span className="cat-name">全部菜品</span>
+          </li>
+          {/* 分类由后端返回，新增分类只需数据库 INSERT，前端无需改代码 */}
+          {categories.map(c => (
+            <li
+              key={c.category_id}
+              className={`sidebar-item ${activeCat === String(c.category_id) ? 'sidebar-item--active' : ''}`}
+              onClick={() => handleCatClick(String(c.category_id))}
+            >
+              <span className="cat-icon">{c.icon}</span>
+              <span className="cat-name">{c.category_name}</span>
+              <span className="cat-count">{c.dish_count}</span>
+            </li>
+          ))}
+        </ul>
+      </aside>
+
+      {/* ── 右侧菜品区 ── */}
+      <main className="menu-main">
+        {/* 搜索 + 排序栏 */}
+        <div className="menu-toolbar">
+          <div className="search-box">
+            <span className="search-icon">🔍</span>
+            <input
+              ref={searchRef}
+              type="text"
+              placeholder="搜索菜品名称..."
+              value={inputVal}
+              onChange={e => setInputVal(e.target.value)}
+            />
+            {inputVal && (
+              <button className="clear-btn" onClick={() => setInputVal('')}>✕</button>
+            )}
+          </div>
+          <div className="sort-tabs">
+            {SORT_OPTIONS.map(opt => (
+              <button
+                key={opt.value}
+                className={`sort-tab ${sort === opt.value ? 'sort-tab--active' : ''}`}
+                onClick={() => setSort(opt.value)}
+              >{opt.label}</button>
+            ))}
+          </div>
+        </div>
+
+        {/* 当前分类标题 */}
+        <div className="menu-section-title">
+          {activeCat
+            ? categories.find(c => String(c.category_id) === activeCat)?.icon + ' ' +
+              categories.find(c => String(c.category_id) === activeCat)?.category_name
+            : '🍽️ 全部菜品'}
+          {!loading && (
+            <span className="dish-count-badge">{dishes.length} 道菜</span>
+          )}
+        </div>
+
+        {/* 菜品网格 */}
+        {loading ? (
+          <div className="menu-loading">
+            <div className="spinner" />
+            <p>加载中...</p>
+          </div>
+        ) : dishes.length === 0 ? (
+          <div className="menu-empty">
+            <p>😕 暂无相关菜品</p>
+            <button onClick={() => { setActiveCat(''); setInputVal(''); setSort(''); }}>
+              清除筛选
+            </button>
+          </div>
+        ) : (
+          <div className="dish-grid">
+            {dishes.map(d => <DishCard key={d.dish_id} dish={d} />)}
+          </div>
+        )}
+      </main>
+    </div>
+  );
+};
+
+export default MenuPage;
