@@ -1,0 +1,79 @@
+// src/components/DishCard.js
+import React from 'react';
+import { Link } from 'react-router-dom';
+import { useCart } from '../context/CartContext';
+import StarRating from './StarRating';
+import './DishCard.css';
+
+// 辣度图标
+const SPICY = ['', '🌶', '🌶🌶', '🌶🌶🌶'];
+
+const DishCard = ({ dish, featured = false }) => {
+  const { cartItems, addToCart, removeFromCart } = useCart();
+  const cartItem = cartItems.find(i => i.dish_id === dish.dish_id);
+
+  return (
+    <div className={`dish-card ${featured ? 'dish-card--featured' : ''}`}>
+      {/* 标签（最多显示2个） */}
+      {dish.tags?.length > 0 && (
+        <div className="dish-card__tags">
+          {dish.tags.slice(0, 2).map(t => (
+            <span key={t.name} className="dish-tag" style={{ background: t.color }}>
+              {t.name}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* 菜品图片 */}
+      <Link to={`/dish/${dish.dish_id}`}>
+        <div className="dish-card__img">
+          <img
+            src={dish.image_url || `https://placehold.co/300x180/f5f5f5/aaa?text=${encodeURIComponent(dish.name)}`}
+            alt={dish.name}
+          />
+        </div>
+      </Link>
+
+      <div className="dish-card__body">
+        <Link to={`/dish/${dish.dish_id}`} className="dish-card__name">{dish.name}</Link>
+        <p className="dish-card__desc">{dish.description}</p>
+
+        {/* 评分 + 辣度 */}
+        <div className="dish-card__meta">
+          <StarRating value={dish.average_rating} readonly size="sm" />
+          <span className="dish-card__count">({dish.rating_count || 0})</span>
+          {dish.spicy_level > 0 && (
+            <span className="spicy">{SPICY[dish.spicy_level]}</span>
+          )}
+          {dish.sales_count > 0 && (
+            <span className="sales">已售{dish.sales_count}</span>
+          )}
+        </div>
+
+        {/* 价格 + 操作 */}
+        <div className="dish-card__footer">
+          <div className="dish-card__price-wrap">
+            <span className="dish-card__price">¥{Number(dish.price).toFixed(2)}</span>
+            {dish.original_price && (
+              <span className="dish-card__original">¥{Number(dish.original_price).toFixed(2)}</span>
+            )}
+          </div>
+          <div className="dish-card__qty">
+            {cartItem ? (
+              <>
+                <button onClick={() => removeFromCart(dish.dish_id)}>－</button>
+                <span>{cartItem.quantity}</span>
+                <button onClick={() => addToCart(dish)}>＋</button>
+              </>
+            ) : (
+              <button className="btn-add" onClick={() => addToCart(dish)}>加入点餐</button>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default DishCard;
