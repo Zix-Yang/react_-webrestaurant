@@ -1,0 +1,161 @@
+// routes/dishes.js
+const express = require('express');
+const router = express.Router();
+const pool = require('../config/db');
+const { optionalAuth } = require('../middleware/auth');
+const crypto = require('crypto');
+
+// ── 查询菜品时附带标签的通用函数 ──
+async function attachTags(dishes) {
+  if (!dishes.length) return dishes;
+  const ids = dishes.map(d => d.dish_id);
+  const [tags] = await pool.query(
+    `SELECT dt.dish_id, t.tag_name, t.color
+     FROM dish_tags dt
+     JOIN tags t ON dt.tag_id = t.tag_id
+     WHERE dt.dish_id IN (?)`,
+    [ids]
+  );
+  const tagMap = {};
+  tags.forEach(t => {
+    if (!tagMap[t.dish_id]) tagMap[t.dish_id] = [];
+    tagMap[t.dish_id].push({ name: t.tag_name, color: t.color });
+  });
+  return dishes.map(d => ({ ...d, tags: tagMap[d.dish_id] || [] }));
+}
+
+// GET /api/dishes?category_id=&sort=&keyword=
+router.get('/', async (req, res) => {
+  const { category_id, sort, keyword } = req.query;
+  let query = `
+    SELECT d.*, c.category_name, c.icon AS category_icon
+    FROM dishes d
+    LEFT JOIN categories c ON d.category_id = c.category_id
+    WHERE d.is_available = TRUE
+  `;
+  const params = [];
+  if (category_id) { query += ' AND d.category_id = ?'; params.push(category_id); }
+  if (keyword)     { query += ' AND d.name LIKE ?';     params.push(`%${keyword}%`); }
+
+  if (sort === 'price_asc')  query += ' ORDER BY d.price ASC';
+  else if (sort === 'price_desc') query += ' ORDER BY d.price DESC';
+  else if (sort === 'rating')     query += ' ORDER BY d.average_rating DESC';
+  else if (sort === 'sales')      query += ' ORDER BY d.sales_count DESC';
+  else query += ' ORDER BY c.sort_order, d.sort_order, d.dish_id';
+
+  try {
+    const [rows] = await pool.query(query, params);
+    res.json(await attachTags(rows));
+  } catch (err) {
+    res.status(500).json({ message: '服务器错误', error: err.message });
+  }
+});
+
+// GET /api/dishes/featured
+router.get('/featured', async (req, res) => {
+  try {
+    const [rows] = await pool.query(`
+      SELECT d.*, c.category_name, c.icon AS category_icon
+      FROM dishes d
+      LEFT JOIN categories c ON d.category_id = c.category_id
+      WHERE d.is_available = TRUE
+        AND (d.is_featured = TRUE OR (d.average_rating >= 4.7 AND d.rating_count >= 100))
+      ORDER BY d.average_rating DESC, d.sales_count DESC
+      LIMIT 8
+    `);
+    res.json(await attachTags(rows));
+  } catch (err) {
+    res.status(500).json({ message: '服务器错误', error: err.message });
+  }
+});
+
+// GET /api/dishes/:id
+router.get('/:id', async (req, res) => {
+  try {
+    const [rows] = await pool.query(`
+      SELECT d.*, c.category_name, c.icon AS category_icon
+      FROM dishes d
+      LEFT JOIN categories c ON d.category_id = c.category_id
+      WHERE d.dish_id = ?
+    `, [req.params.id]);
+    if (!rows.length) return res.status(404).json({ message: '菜品不存在' });
+    const [dish] = await attachTags(rows);
+    res.json(dish);
+  } catch (err) {
+    res.status(500).json({ message: '服务器错误', error: err.message });
+  }
+});
+
+// POST /api/dishes/:id/rating
+router.post('/:id/rating', optionalAuth, async (req, res) => {
+  const { score } = req.body;
+  const dishId = req.params.id;
+  if (!score || score < 1 || score > 5)
+    return res.status(400).json({ message: '评分需在1-5之间' });
+
+  const ip = req.ip || req.connection.remoteAddress;
+  const ipHash = crypto.createHash('sha256').update(ip + dishId).digest('hex');
+
+  try {
+    const [existing] = await pool.query(
+      `SELECT rating_id FROM ratings
+       WHERE dish_id = ? AND ip_hash = ?
+         AND created_at > DATE_SUB(NOW(), INTERVAL 24 HOUR)`,
+      [dishId, ipHash]
+    );
+    if (existing.length) return res.status(429).json({ message: '您今天已经评过分了' });
+
+    await pool.query(
+      'INSERT INTO ratings (dish_id, user_id, score, ip_hash) VALUES (?, ?, ?, ?)',
+      [dishId, req.user?.userId || null, score, ipHash]
+    );
+    await pool.query(`
+      UPDATE dishes
+      SET average_rating = (SELECT AVG(score) FROM ratings WHERE dish_id = ?),
+          rating_count   = (SELECT COUNT(*)   FROM ratings WHERE dish_id = ?)
+      WHERE dish_id = ?
+    `, [dishId, dishId, dishId]);
+
+    res.json({ message: '评分成功' });
+  } catch (err) {
+    res.status(500).json({ message: '服务器错误', error: err.message });
+  }
+});
+
+// GET /api/dishes/:id/comments
+router.get('/:id/comments', async (req, res) => {
+  try {
+    const [rows] = await pool.query(`
+      SELECT comment_id, nickname, content, score, is_anonymous, created_at
+      FROM comments
+      WHERE dish_id = ? AND status = 'approved'
+      ORDER BY created_at DESC
+    `, [req.params.id]);
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ message: '服务器错误', error: err.message });
+  }
+});
+
+// POST /api/dishes/:id/comments
+router.post('/:id/comments', optionalAuth, async (req, res) => {
+  const { content, nickname, score } = req.body;
+  if (!content || content.trim().length < 2)
+    return res.status(400).json({ message: '评论内容太短' });
+
+  const displayNickname = req.user
+    ? req.user.username
+    : (nickname?.trim() || '匿名用户');
+
+  try {
+    await pool.query(
+      'INSERT INTO comments (dish_id, user_id, nickname, content, score, is_anonymous) VALUES (?, ?, ?, ?, ?, ?)',
+      [req.params.id, req.user?.userId || null, displayNickname, content.trim(), score || null, !req.user]
+    );
+    res.status(201).json({ message: '评论发布成功' });
+  } catch (err) {
+    res.status(500).json({ message: '服务器错误', error: err.message });
+  }
+});
+
+module.exports = router;
