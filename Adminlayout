@@ -1,0 +1,45 @@
+// src/pages/admin/AdminLayout.js
+import React from 'react';
+import { NavLink, useNavigate, Outlet } from 'react-router-dom';
+import './AdminLayout.css';
+
+const NAV = [
+  { to: '/admin/dashboard', icon: '📊', label: '仪表盘' },
+  { to: '/admin/orders',    icon: '📋', label: '订单管理' },
+  { to: '/admin/dishes',    icon: '🍽️', label: '菜品管理' },
+  { to: '/admin/categories',icon: '📂', label: '分类管理' },
+  { to: '/admin/comments',  icon: '💬', label: '评论管理' },
+  { to: '/admin/feedbacks', icon: '📣', label: '意见反馈' },
+  { to: '/admin/users',     icon: '👥', label: '用户管理' },
+  { to: '/admin/tables',    icon: '🔲', label: '桌号/二维码' },
+];
+
+const AdminLayout = () => {
+  const navigate = useNavigate();
+  const handleLogout = () => {
+    localStorage.removeItem('adminToken');
+    navigate('/admin/login');
+  };
+
+  return (
+    <div className="admin-layout">
+      <aside className="admin-sidebar">
+        <div className="admin-brand">🍜 餐厅后台</div>
+        <nav>
+          {NAV.map(n => (
+            <NavLink key={n.to} to={n.to} className={({ isActive }) => `admin-nav-item ${isActive ? 'active' : ''}`}>
+              <span className="nav-icon">{n.icon}</span>
+              <span>{n.label}</span>
+            </NavLink>
+          ))}
+        </nav>
+        <button className="admin-logout" onClick={handleLogout}>退出登录</button>
+      </aside>
+      <main className="admin-content">
+        <Outlet />
+      </main>
+    </div>
+  );
+};
+
+export default AdminLayout;
