@@ -1,0 +1,57 @@
+// src/pages/admin/AdminDashboard.js
+import React, { useEffect, useState } from 'react';
+import api from '../../services/api';
+import './AdminDashboard.css';
+
+const StatCard = ({ icon, label, value, color }) => (
+  <div className="stat-card" style={{ borderTopColor: color }}>
+    <div className="stat-icon">{icon}</div>
+    <div className="stat-val">{value}</div>
+    <div className="stat-label">{label}</div>
+  </div>
+);
+
+const AdminDashboard = () => {
+  const [stats, setStats] = useState(null);
+
+  useEffect(() => {
+    api.admin.getStats().then(setStats).catch(() => {});
+  }, []);
+
+  if (!stats) return <div className="admin-loading">加载中...</div>;
+
+  return (
+    <div className="admin-page">
+      <div className="admin-page-header"><h1>仪表盘</h1></div>
+
+      <div className="stats-grid">
+        <StatCard icon="📋" label="总订单"   value={stats.total_orders}    color="#3498db" />
+        <StatCard icon="⏳" label="待处理订单" value={stats.pending_orders}  color="#f39c12" />
+        <StatCard icon="💰" label="累计营收"  value={`¥${Number(stats.total_revenue).toFixed(0)}`} color="#27ae60" />
+        <StatCard icon="👥" label="注册用户"  value={stats.total_users}     color="#9b59b6" />
+        <StatCard icon="🍽️" label="在售菜品"  value={stats.total_dishes}    color="#e74c3c" />
+        <StatCard icon="💬" label="待审评论"  value={stats.pending_comments} color="#e67e22" />
+        <StatCard icon="📣" label="待处理反馈" value={stats.pending_feedbacks} color="#1abc9c" />
+      </div>
+
+      <div className="top-dishes">
+        <h2>🔥 销量 Top 5</h2>
+        <div className="top-dish-list">
+          {stats.top_dishes?.map((d, i) => (
+            <div key={i} className="top-dish-item">
+              <span className="rank">#{i + 1}</span>
+              <span className="dish-name">{d.name}</span>
+              <span className="dish-rating">⭐ {Number(d.average_rating).toFixed(1)}</span>
+              <span className="dish-sales">已售 {d.sales_count}</span>
+              <div className="bar-wrap">
+                <div className="bar" style={{ width: `${Math.min(100, (d.sales_count / (stats.top_dishes[0]?.sales_count || 1)) * 100)}%` }} />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default AdminDashboard;
