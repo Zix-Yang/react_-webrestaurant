@@ -1,0 +1,127 @@
+# 🚀 Restaurant Web App 启动指南
+
+## 第一步：安装环境（从零开始）
+
+### 1. 安装 Node.js
+前往 https://nodejs.org → 下载 **LTS 版本** → 安装
+安装完后在命令行运行验证：
+```
+node -v
+npm -v
+```
+
+### 2. 安装 MySQL
+前往 https://dev.mysql.com/downloads/installer/ → 下载 MySQL Installer
+- 安装时选择 Developer Default
+- 设置 root 密码（记住它，后面要用）
+
+---
+
+## 第二步：初始化数据库
+
+打开 MySQL 命令行或 MySQL Workbench，执行：
+```
+source /路径到文件/database/schema.sql
+```
+或者把 schema.sql 的内容粘贴进去执行。
+
+---
+
+## 第三步：启动后端
+
+```bash
+cd backend
+npm install
+cp .env.example .env
+```
+
+编辑 .env 文件，填入你的 MySQL 密码和 JWT 密钥：
+```
+DB_PASSWORD=你的MySQL密码
+JWT_SECRET=随便写一串字符，比如 mysecretkey123
+```
+
+然后启动：
+```bash
+npm run dev
+```
+看到 `✅ 后端服务启动成功: http://localhost:5000` 即成功。
+
+---
+
+## 第四步：启动前端
+
+新开一个命令行窗口：
+```bash
+cd frontend
+npm install
+npm start
+```
+浏览器会自动打开 http://localhost:3000
+
+---
+
+## 项目结构
+
+```
+restaurant-web/
+├── database/
+│   └── schema.sql          # 建表SQL + 测试数据
+├── backend/
+│   ├── server.js           # 入口文件
+│   ├── .env.example        # 环境变量模板
+│   ├── config/db.js        # 数据库连接
+│   ├── middleware/auth.js  # JWT认证中间件
+│   └── routes/
+│       ├── auth.js         # 注册/登录
+│       ├── dishes.js       # 菜品/评分/评论
+│       ├── orders.js       # 桌号/订单
+│       ├── feedback.js     # 意见反馈
+│       └── categories.js  # 菜品分类
+└── frontend/
+    ├── public/index.html
+    └── src/
+        ├── App.js              # 路由总入口
+        ├── services/api.js     # 所有API调用
+        ├── context/
+        │   ├── AuthContext.js  # 登录状态
+        │   └── CartContext.js  # 购物车状态
+        ├── components/
+        │   ├── Navbar.js       # 导航栏
+        │   ├── DishCard.js     # 菜品卡片
+        │   └── StarRating.js   # 星级评分
+        └── pages/
+            ├── HomePage.js     # 首页
+            ├── MenuPage.js     # 菜单页
+            ├── OrderPage.js    # 点餐页（桌号绑定+购物车）
+            ├── DishDetailPage.js # 菜品详情+评论
+            ├── AuthPage.js     # 登录/注册
+            └── FeedbackPage.js # 意见反馈
+```
+
+---
+
+## 页面功能对照
+
+| 路径 | 功能 |
+|------|------|
+| / | 首页：明星菜品展示、餐厅信息、快速意见反馈 |
+| /menu | 菜单：分类筛选、排序、加入购物车 |
+| /order | 点餐：绑定桌号、拼桌、提交订单 |
+| /dish/:id | 菜品详情：评分、匿名评论 |
+| /feedback | 意见反馈：分类提交 |
+| /login | 用户登录 |
+| /register | 用户注册 |
+
+---
+
+## 常见问题
+
+**Q: npm install 太慢？**
+换淘宝镜像：`npm config set registry https://registry.npmmirror.com`
+
+**Q: 数据库连接失败？**
+检查 .env 里的 DB_PASSWORD 是否正确，MySQL 服务是否已启动。
+
+**Q: 前端报 CORS 错误？**
+确保后端已经启动在 5000 端口，前端 package.json 里的 proxy 已设置。
